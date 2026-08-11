@@ -2,9 +2,12 @@
 const AdminDashboard = {
     template: `
         <div class="container mt-4 mb-5">
-            <div class="d-flex justify-content-between align-items-center mb-4">
+           <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2>Admin Dashboard</h2>
-                <button @click="logout" class="btn btn-danger btn-sm">Logout</button>
+                <div>
+                    <button @click="triggerEmail" class="btn btn-primary btn-sm me-2">Test Daily Email</button>
+                    <button @click="logout" class="btn btn-danger btn-sm">Logout</button>
+                </div>
             </div>
             
             <div v-if="error" class="alert alert-danger shadow-sm">{{ error }}</div>
@@ -190,6 +193,18 @@ const AdminDashboard = {
                     alert(data.message);
                 }
             } catch (err) { console.error("Error toggling user status"); }
+        },
+        async triggerEmail() {
+            try {
+                const res = await fetch('/api/admin/test-email', { headers: this.getHeaders() });
+                if (res.ok) {
+                    alert("✅ Background Task Triggered! Check the terminal and your inbox.");
+                } else {
+                    alert("Failed to trigger email task.");
+                }
+            } catch (err) { 
+                console.error("Error triggering email"); 
+            }
         },
         logout() {
             localStorage.removeItem('token');

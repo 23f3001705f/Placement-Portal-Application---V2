@@ -42,31 +42,31 @@ def send_daily_reminders():
     Triggered daily by Celery Beat.
     Queries the database for active drives and sends a summary reminder.
     """
+    from app import app # <-- Import the Flask app
     print("\n🚀 CELERY BEAT: Running Daily Reminder Task...")
     
-    # Query all active placement drives
-    active_drives = PlacementDrive.query.filter_by(status='Active').all()
-    
-    # Build a real HTML email using the database results
-    html_content = """
-    <div style="font-family: Arial, sans-serif;">
-        <h2 style="color: #d9534f;">Daily Reminder: Active Placement Drives</h2>
-        <p>Don't miss out! Here are the currently active placement drives you can apply for:</p>
-        <ul>
-    """
-    
-    for drive in active_drives:
-        # Format the deadline nicely
-        deadline_str = drive.application_deadline.strftime('%Y-%m-%d')
-        html_content += f"<li><strong>{drive.job_title}</strong> - Deadline: {deadline_str}</li>"
+    # Wrap database queries in the app context
+    with app.app_context():
+        active_drives = PlacementDrive.query.filter_by(status='Active').all()
         
-    html_content += """
-        </ul>
-        <p>Log in to your Student Dashboard to apply today.</p>
-    </div>
-    """
-    
-    # Sending to your test email to avoid bounce errors during the viva
+        html_content = """
+        <div style="font-family: Arial, sans-serif;">
+            <h2 style="color: #d9534f;">Daily Reminder: Active Placement Drives</h2>
+            <p>Don't miss out! Here are the currently active placement drives you can apply for:</p>
+            <ul>
+        """
+        
+        for drive in active_drives:
+            deadline_str = drive.application_deadline.strftime('%Y-%m-%d')
+            html_content += f"<li><strong>{drive.job_title}</strong> - Deadline: {deadline_str}</li>"
+            
+        html_content += """
+            </ul>
+            <p>Log in to your Student Dashboard to apply today.</p>
+        </div>
+        """
+        
+    # Send email outside the DB context block
     send_email("testing98260@gmail.com", "Action Required: Upcoming Placement Deadlines", html_content)
     
     print("✅ Daily reminders sent successfully.\n")
@@ -79,12 +79,14 @@ def monthly_activity_report():
     Triggered monthly by Celery Beat.
     Calculates total drives, applications, and selections for the Admin.
     """
+    from app import app # <-- Import the Flask app
     print("\n🚀 CELERY BEAT: Running Monthly Activity Report...")
     
-    # Real SQLAlchemy Aggregate Queries!
-    total_drives = PlacementDrive.query.count()
-    total_applications = JobApplication.query.count()
-    total_selected = JobApplication.query.filter_by(status='Selected').count()
+    # Wrap database queries in the app context
+    with app.app_context():
+        total_drives = PlacementDrive.query.count()
+        total_applications = JobApplication.query.count()
+        total_selected = JobApplication.query.filter_by(status='Selected').count()
     
     html_content = f"""
     <div style="font-family: Arial, sans-serif;">
@@ -101,50 +103,76 @@ def monthly_activity_report():
     </div>
     """
     
-    # Sending to your test email for the live demo
     send_email("testing98260@gmail.com", "Monthly Placement Portal Activity Report", html_content)
     
     print("✅ Monthly activity report generated and sent.\n")
     return "Monthly report task completed."
-import csv
-import os
 
-# ... (Keep your existing email tasks above this) ...
 
 @celery.task
-def export_student_applications_csv(student_id, file_path):
+def monthly_activity_report():
     """
-    Triggered asynchronously by the user.
-    Generates a CSV of a student's applications and saves it to the static folder.
+    Triggered monthly by Celery Beat.
+    Calculates total drives, applications, and selections for the Admin.
     """
-    print(f"\n🚀 CELERY WORKER: Generating CSV for Student ID: {student_id}")
+    from app import app # <-- Import the Flask app
+    print("\n🚀 CELERY BEAT: Running Monthly Activity Report...")
     
-    # Ensure the static/exports directory exists before writing to it
+    # Wrap database queries in the app context
+    with app.app_context():
+        total_drives = PlacementDrive.query.count()
+        total_applications = JobApplication.query.count()
+        total_selected = JobApplication.query.filter_by(status='Selected').count()
+    
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif;">
+        <h2 style="color: #0275d8;">Monthly Placement Activity Report</h2>
+        <p>Here is the automated summary of the institute's placement cell activities:</p>
+        <hr>
+        <ul style="font-size: 16px;">
+            <li><b>Total Placement Drives Conducted:</b> {total_drives}</li>
+            <li><b>Total Student Applications Processed:</b> {total_applications}</li>
+            <li><b>Total Students Successfully Selected:</b> {total_selected}</li>
+        </ul>
+        <hr>
+        <p>This report was generated automatically by the Celery Beat Scheduler.</p>
+    </div>
+    """
+    
+    send_email("testing98260@gmail.com", "Monthly Placement Portal Activity Report", html_content)
+    
+    print("✅ Monthly activity report generated and sent.\n")
+    return "Monthly report task completed."
+@celery.task
+def export_student_applications_csv(student_id, file_path):
+    import os
+    import csv
+    from app import app # <-- Import the Flask app
+
+    print(f"\n🚀 CELERY WORKER: Generating CSV for Student ID: {student_id}")
     os.makedirs(os.path.dirname(file_path), exist_ok=True)
     
-    # Query all applications for this student
-    applications = JobApplication.query.filter_by(student_id=student_id).all()
-    
-    # Create and write to the CSV file
-    with open(file_path, mode='w', newline='', encoding='utf-8') as file:
-        writer = csv.writer(file)
-        # Write the header row
-        writer.writerow(['Application ID', 'Company Name', 'Job Title', 'Status', 'Interview Date', 'Feedback'])
+    # Wrap database queries in the app context
+    with app.app_context():
+        applications = JobApplication.query.filter_by(student_id=student_id).all()
         
-        # Write the data rows
-        for app in applications:
-            drive = PlacementDrive.query.get(app.drive_id)
-            company = Company.query.get(drive.company_id) if drive else None
+        with open(file_path, mode='w', newline='', encoding='utf-8') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Application ID', 'Company Name', 'Job Title', 'Status', 'Interview Date', 'Feedback'])
             
-            writer.writerow([
-                app.id,
-                company.name if company else 'Unknown',
-                drive.job_title if drive else 'Unknown',
-                app.status,
-                app.interview_date if app.interview_date else 'Pending',
-                app.feedback if app.feedback else 'None'
-            ])
-            
+            for app_record in applications:
+                drive = PlacementDrive.query.get(app_record.drive_id)
+                company = Company.query.get(drive.company_id) if drive else None
+                
+                writer.writerow([
+                    app_record.id,
+                    company.name if company else 'Unknown',
+                    drive.job_title if drive else 'Unknown',
+                    app_record.status,
+                    app_record.interview_date if app_record.interview_date else 'Pending',
+                    app_record.feedback if app_record.feedback else 'None'
+                ])
+                
     print(f"✅ CSV successfully saved to {file_path}\n")
     return file_path
 @celery.task

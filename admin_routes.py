@@ -30,19 +30,16 @@ def get_stats():
 @admin_bp.route('/api/admin/companies', methods=['GET'])
 @jwt_required()
 def get_companies():
+    from app import cache # Local import prevents crash
     if not is_admin():
         return jsonify({"message": "Unauthorized access"}), 403
     
     search = request.args.get('search', '').lower()
-
-    # --- INJECT REDIS CACHE HERE ---
-    from app import cache
     cache_key = f"admin_comp_search_{search}"
+    
     cached_data = cache.get(cache_key)
     if cached_data:
-        print("🚀 SUCCESS: Serving Admin Companies from REDIS CACHE!")
         return jsonify(cached_data), 200
-    # -------------------------------
 
     if search:
         companies = Company.query.filter(Company.name.ilike(f"%{search}%")).all()
@@ -56,35 +53,28 @@ def get_companies():
             "id": c.id,
             "name": c.name,
             "hr_contact": c.hr_contact,
-            "website": c.website,
+            "website": getattr(c, 'website', ''),
             "is_approved": c.is_approved,
             "user_id": c.user_id,
             "is_active": user.is_active if user else False
         })
 
-    # --- SAVE TO REDIS CACHE BEFORE RETURNING ---
     cache.set(cache_key, company_list, timeout=60)
-    print("⚠️ Cache miss. Queried from SQLite.")
-    # --------------------------------------------
-
     return jsonify(company_list), 200
 
 @admin_bp.route('/api/admin/students', methods=['GET'])
 @jwt_required()
 def get_students():
+    from app import cache # Local import prevents crash
     if not is_admin():
         return jsonify({"message": "Unauthorized access"}), 403
         
     search = request.args.get('search', '').lower()
-
-    # --- INJECT REDIS CACHE HERE ---
-    from app import cache
     cache_key = f"admin_stud_search_{search}"
+    
     cached_data = cache.get(cache_key)
     if cached_data:
-        print("🚀 SUCCESS: Serving Admin Students from REDIS CACHE!")
         return jsonify(cached_data), 200
-    # -------------------------------
 
     if search:
         students = Student.query.filter(
@@ -107,11 +97,7 @@ def get_students():
             "is_active": user.is_active if user else False
         })
 
-    # --- SAVE TO REDIS CACHE BEFORE RETURNING ---
     cache.set(cache_key, student_list, timeout=60)
-    print("⚠️ Cache miss. Queried from SQLite.")
-    # --------------------------------------------
-
     return jsonify(student_list), 200
 
 # ==========================================
@@ -207,7 +193,6 @@ def get_all_applications():
 @admin_bp.route('/api/admin/applications', methods=['GET'])
 @jwt_required()
 def get_platform_applications():
-    """Admin can view all job applications across the platform"""
     if not is_admin():
         return jsonify({"message": "Unauthorized access"}), 403
         
@@ -228,3 +213,13 @@ def get_platform_applications():
         })
         
     return jsonify(app_list), 200
+
+from flask import jsonify
+from flask_jwt_extended import jwt_required
+
+@admin_bp.route('/api/admin/test-email', methods=['GET'])
+@jwt_required()  # <-- ADD THIS TO SECURE IT
+def test_email():
+    from tasks import send_daily_reminders
+    send_daily_reminders.delay() 
+    return jsonify({"message": "Email task triggered successfully!"}), 200

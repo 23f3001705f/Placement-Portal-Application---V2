@@ -59,6 +59,16 @@ def create_app():
 # Create global instances for the server and Celery worker
 app = create_app()
 celery = app.celery
+celery.conf.beat_schedule = {
+    'daily-reminder-task': {
+        'task': 'tasks.send_daily_reminders',
+        'schedule': 86400.0, # Runs every 24 hours
+    },
+    'monthly-report-task': {
+        'task': 'tasks.monthly_activity_report',
+        'schedule': 2592000.0, # Runs every 30 days
+    }
+}
 
 if __name__ == '__main__':
     app.run(debug=True)
